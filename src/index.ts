@@ -83,8 +83,8 @@ async function updateUserStats(
          VALUES ($1, $2, $3, $4, 1)
          ON CONFLICT (server_id, user_id) 
          DO UPDATE SET
-            feur_count = CASE WHEN $5 = 'feur' THEN server_stats.feur_count + 1 ELSE server_stats.feur_count END,
-            coubeh_count = CASE WHEN $5 = 'coubeh' THEN server_stats.coubeh_count + 1 ELSE server_stats.coubeh_count END,
+            feur_count = CASE WHEN $5 = 'feur 😂' THEN server_stats.feur_count + 1 ELSE server_stats.feur_count END,
+            coubeh_count = CASE WHEN $5 = 'coubeh 😂' THEN server_stats.coubeh_count + 1 ELSE server_stats.coubeh_count END,
             total_count = server_stats.total_count + 1`,
       [
         serverId,
