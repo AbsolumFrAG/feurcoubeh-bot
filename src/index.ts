@@ -26,13 +26,15 @@ const ITEMS_PER_PAGE = 5;
 async function initDatabase() {
   try {
     await pool.query(`
-            CREATE TABLE IF NOT EXISTS user_stats (
-                user_id VARCHAR(255) PRIMARY KEY,
-                feur_count INTEGER DEFAULT 0,
-                coubeh_count INTEGER DEFAULT 0,
-                total_count INTEGER DEFAULT 0
-            );
-        `);
+        CREATE TABLE IF NOT EXISTS server_stats (
+            server_id VARCHAR(255),
+            user_id VARCHAR(255),
+            feur_count INTEGER DEFAULT 0,
+            coubeh_count INTEGER DEFAULT 0,
+            total_count INTEGER DEFAULT 0,
+            PRIMARY KEY (server_id, user_id)
+        );
+    `);
     console.log("Base de données initialisée");
   } catch (error) {
     console.error(
@@ -47,6 +49,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -69,17 +72,22 @@ function getRandomResponse(): Response {
   return responses[randomIndex];
 }
 
-async function updateUserStats(userId: string, response: Response) {
+async function updateUserStats(
+  serverId: string,
+  userId: string,
+  response: Response
+) {
   try {
     await pool.query(
-      `INSERT INTO user_stats (user_id, feur_count, coubeh_count, total_count)
-             VALUES ($1, $2, $3, 1)
-             ON CONFLICT (user_id) 
-             DO UPDATE SET
-                feur_count = CASE WHEN $4 = 'feur' THEN user_stats.feur_count + 1 ELSE user_stats.feur_count END,
-                coubeh_count = CASE WHEN $4 = 'coubeh' THEN user_stats.coubeh_count + 1 ELSE user_stats.coubeh_count END,
-                total_count = user_stats.total_count + 1`,
+      `INSERT INTO server_stats (server_id, user_id, feur_count, coubeh_count, total_count)
+         VALUES ($1, $2, $3, $4, 1)
+         ON CONFLICT (server_id, user_id) 
+         DO UPDATE SET
+            feur_count = CASE WHEN $5 = 'feur' THEN server_stats.feur_count + 1 ELSE server_stats.feur_count END,
+            coubeh_count = CASE WHEN $5 = 'coubeh' THEN server_stats.coubeh_count + 1 ELSE server_stats.coubeh_count END,
+            total_count = server_stats.total_count + 1`,
       [
+        serverId,
         userId,
         response === "feur 😂" ? 1 : 0,
         response === "coubeh 😂" ? 1 : 0,
@@ -91,10 +99,11 @@ async function updateUserStats(userId: string, response: Response) {
   }
 }
 
-async function getTotalPages(): Promise<number> {
+async function getTotalPages(serverId: string): Promise<number> {
   try {
     const result = await pool.query(
-      "SELECT COUNT(*) FROM user_stats WHERE total_count > 0"
+      "SELECT COUNT(*) FROM server_stats WHERE server_id = $1 AND total_count > 0",
+      [serverId]
     );
     const totalUsers = parseInt(result.rows[0].count);
     return Math.ceil(totalUsers / ITEMS_PER_PAGE);
@@ -104,15 +113,18 @@ async function getTotalPages(): Promise<number> {
   }
 }
 
-async function generateLeaderboardPage(page: number): Promise<string> {
+async function generateLeaderboardPage(
+  serverId: string,
+  page: number
+): Promise<string> {
   try {
     const offset = (page - 1) * ITEMS_PER_PAGE;
     const result = await pool.query(
-      `SELECT * FROM user_stats 
-         WHERE total_count > 0
+      `SELECT * FROM server_stats 
+         WHERE server_id = $1 AND total_count > 0
          ORDER BY total_count DESC 
-         LIMIT $1 OFFSET $2`,
-      [ITEMS_PER_PAGE, offset]
+         LIMIT 5 OFFSET $2`,
+      [serverId, offset]
     );
 
     let leaderboardText = "🏆 **Classement des victimes** 🏆\n\n";
@@ -195,12 +207,23 @@ function createNavigationRow(currentPage: number, totalPages: number) {
 }
 
 async function handleLeaderboard(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: "Cette commande ne peut être utilisée que dans un serveur.",
+      ephemeral: true,
+    });
+    return;
+  }
+
   await interaction.deferReply();
 
   let currentPage = 1;
-  const totalPages = await getTotalPages();
+  const totalPages = await getTotalPages(interaction.guildId);
 
-  const content = await generateLeaderboardPage(currentPage);
+  const content = await generateLeaderboardPage(
+    interaction.guildId,
+    currentPage
+  );
   const row = createNavigationRow(currentPage, totalPages);
 
   const response = await interaction.editReply({
@@ -237,7 +260,10 @@ async function handleLeaderboard(interaction: ChatInputCommandInteraction) {
         break;
     }
 
-    const newContent = await generateLeaderboardPage(currentPage);
+    const newContent = await generateLeaderboardPage(
+      interaction.guildId!,
+      currentPage
+    );
     const newRow = createNavigationRow(currentPage, totalPages);
 
     await i.update({
@@ -283,13 +309,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return;
+  if (message.author.bot || !message.guildId) return;
 
   if (endsWithQuoi(message.content)) {
     try {
       const response = getRandomResponse();
       await message.reply(response);
-      await updateUserStats(message.author.id, response);
+      await updateUserStats(message.guildId, message.author.id, response);
     } catch (error) {
       console.error("Erreur lors de l'envoi de la réponse:", error);
     }
