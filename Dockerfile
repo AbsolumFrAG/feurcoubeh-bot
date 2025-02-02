@@ -2,7 +2,7 @@
 FROM node:22-slim AS builder
 
 # Installation de pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ RUN pnpm run build
 FROM node:22-slim AS production
 
 # Installation de pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm
 
 WORKDIR /app
 
