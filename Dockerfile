@@ -1,5 +1,5 @@
 # Stage de build
-FROM node:22-slim AS builder
+FROM node:22-alpine AS builder
 
 # Installation de pnpm
 RUN npm install -g pnpm
@@ -20,7 +20,7 @@ COPY src/ ./src/
 RUN pnpm run build
 
 # Stage de production
-FROM node:22-slim AS production
+FROM node:22-alpine AS production
 
 # Installation de pnpm
 RUN npm install -g pnpm
