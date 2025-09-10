@@ -4,5 +4,5 @@ services:
     environment:
       - NODE_ENV=production
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - DATABASE_URL=postgres://feurcoubeh:${POSTGRES_PASSWORD}@db:5432/feurcoubehdb
+      - DATABASE_URL=postgres://feurcoubeh:${POSTGRES_PASSWORD}@localhost:5432/feurcoubehdb
     restart: unless-stopped
